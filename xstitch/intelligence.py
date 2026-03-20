@@ -49,6 +49,24 @@ NEW_SIGNALS = {
     "develop a ", "design a ",
 }
 
+# Pattern-based new-intent detection — more generic than exact string matching.
+# Uses regex to recognize linguistic structures that signal context switches:
+# - "new/fresh/different X" where X is a topic-type word
+# - "start fresh/over/again"
+# - "change/switch the topic/context"
+# Covers natural language variations without enumerating every phrasing.
+_NEW_CONTEXT_PATTERNS: list[str] = [
+    # "new/fresh/different/separate/another/unrelated <topic-word>"
+    r"\b(new|fresh|different|separate|another|unrelated)\b.{0,40}\b(context|question|topic|issue|problem|request|subject)\b",
+    # "start fresh/over/anew/again"
+    r"\bstart\s+(fresh|over|anew|again)\b",
+    # "from scratch" or "brand new" (already in NEW_SIGNALS as exact strings,
+    # but pattern catches variants like "completely from scratch")
+    r"\b(completely|totally|entirely)\s+(new|different|unrelated|fresh)\b",
+    # "change/switch the topic/context/subject"
+    r"\b(change|switch)\s+(the\s+)?(topic|context|subject|question)\b",
+]
+
 # Short greetings and conversational prompts that are NOT task-related.
 # These should never trigger loading a full task context or creating a new task.
 _GREETING_PATTERNS = {
@@ -187,8 +205,20 @@ def detect_intent(user_prompt: str) -> str:
     """Detect whether the user wants to resume an existing task or start new.
 
     Returns: 'resume', 'new', or 'ambiguous'
+
+    Two detection layers:
+    1. Pattern-based (regex): detects context-switch structures generically,
+       covering natural language variations without hardcoding every phrasing.
+    2. Signal-word scoring: exact keyword scoring for strong resume/new signals.
     """
     prompt_lower = user_prompt.lower()
+
+    # Layer 1: Pattern-based new-context detection.
+    # Regex patterns catch linguistic structures like "new/different/fresh <topic>",
+    # "change/switch the topic", "start fresh/over" — more generic than exact strings.
+    for pattern in _NEW_CONTEXT_PATTERNS:
+        if re.search(pattern, prompt_lower):
+            return "new"
 
     resume_score = 0
     new_score = 0
@@ -258,7 +288,7 @@ def auto_route(user_prompt: str, store: Store) -> dict:
 
     else:  # ambiguous — relevance is the ONLY gate
         matches = smart_match(user_prompt, store)
-        if matches and matches[0]["confidence"] >= 0.4:
+        if matches and matches[0]["confidence"] >= 0.65:
             result = _handle_resume(user_prompt, store, result)
         elif _is_conversational(user_prompt):
             # Greeting/filler — don't create a task for "hi claude"

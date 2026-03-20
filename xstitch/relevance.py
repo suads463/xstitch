@@ -512,12 +512,38 @@ class BM25RelevanceEngine:
 
                 effective_fraction = max(raw_fraction, idf_fraction)
 
-                # Floor: matching in coarse fields (title/objective/tags) is
-                # strong intent evidence — a single specific term in the title
-                # is enough to identify the task, even if the query has many
-                # extra terms the task never mentioned.
+                # PageIndex tree-root boost: query-length-adaptive coarse floor.
+                #
+                # A term matching in a coarse field (title/objective/tags) is a
+                # task-identity signal — those fields describe WHAT the task IS,
+                # not just what happened inside it. Without any boost, a verbose
+                # query ("I was looking at logs last week and noticed something
+                # weird with eucatur...") dilutes raw_fraction (1/15 ≈ 0.07),
+                # hiding a genuine specific-term match.
+                #
+                # DESIGN: floor = min(1.0, coarse_unigram_fraction + COARSE_BOOST)
+                #
+                # We use UNIGRAM coverage (not all_query_terms which includes
+                # bigrams) so that a 2-word query like "check eucatur" isn't
+                # penalized for generating a third "check_eucatur" bigram term.
+                # Bigrams remain in the main score; the floor uses cleaner signal.
+                #
+                # This is query-length adaptive:
+                #   Short query  ("check eucatur"), 1/2 match  → floor = 0.5+0.3 = 0.8 ✓
+                #   Medium query (5 words), 1/5 match          → floor = 0.2+0.3 = 0.5
+                #   Long query   (12 words), 1/12 match        → floor = 0.08+0.3 = 0.38
+                #
+                # Paired with the ambiguous-intent threshold (0.65): short focused
+                # queries auto-resume; long verbose queries with one random match
+                # stay below 0.65 and create a new task.
+                COARSE_BOOST = 0.3
                 if coarse_matched:
-                    effective_fraction = max(effective_fraction, 0.5)
+                    n_query_unigrams = max(len(set(query_tokens)), 1)
+                    coarse_unigram_fraction = len(coarse_matched) / n_query_unigrams
+                    effective_fraction = max(
+                        effective_fraction,
+                        min(1.0, coarse_unigram_fraction + COARSE_BOOST),
+                    )
 
                 results.append({
                     "task": doc.task,
