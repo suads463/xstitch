@@ -790,29 +790,55 @@ def _now_iso_local() -> str:
 
 
 def _append_session_continuity(context_msg: str, current_session_id: str) -> str:
+    """Append prior activity so each agent turn connects the dots.
+
+    Two cases handled:
+    1. SAME ACTIVE SESSION (no Stop yet): user sends a follow-up message while
+       the Claude Code window is still open. The new agent turn sees what the
+       previous turn(s) already did — crucial for multi-turn workflows.
+    2. RESUMED SESSION (Stop was recent, < 30 min): user reopened Claude Code
+       and starts working again. Shows what the prior session accomplished.
+    """
     try:
         state = _load_session_state()
-        stop_time = state.get("stop_time", "")
-        if not stop_time:
-            return context_msg
-        if _seconds_since(stop_time) > _SESSION_CONTINUITY_WINDOW:
-            return context_msg
         recent_tools = state.get("recent_tools", [])
         total_tools = state.get("sig_tool_count", 0)
+
         if not recent_tools or total_tools == 0:
             return context_msg
-        lines = [
-            "",
-            "## Prior Turn Activity (same session)",
-            f"The immediately preceding agent turn performed {total_tools} significant actions:",
-        ]
-        for t in recent_tools[-6:]:
-            lines.append(f"  - {t}")
-        lines.append(
-            "Connect the dots: use this to understand what was already done "
-            "before this new user message arrived."
-        )
-        return context_msg + "\n".join(lines)
+
+        # Case 1: Same active session — inject without needing a prior Stop
+        if current_session_id and state.get("session_id") == current_session_id:
+            lines = [
+                "",
+                "## Same-Session Activity (earlier turns in this conversation)",
+                f"This conversation already performed {total_tools} significant action(s):",
+            ]
+            for t in recent_tools[-6:]:
+                lines.append(f"  - {t}")
+            lines.append(
+                "Use this to avoid redoing work, understand current state, "
+                "and connect the dots with the user's new message."
+            )
+            return context_msg + "\n" + "\n".join(lines)
+
+        # Case 2: Resumed from a recent prior session (Stop fired < 30 min ago)
+        stop_time = state.get("stop_time", "")
+        if stop_time and _seconds_since(stop_time) <= _SESSION_CONTINUITY_WINDOW:
+            lines = [
+                "",
+                "## Prior Session Activity (resumed recently)",
+                f"The previous session performed {total_tools} significant action(s):",
+            ]
+            for t in recent_tools[-6:]:
+                lines.append(f"  - {t}")
+            lines.append(
+                "Connect the dots: this context may be directly relevant "
+                "to the user's current request."
+            )
+            return context_msg + "\n" + "\n".join(lines)
+
+        return context_msg
     except Exception:
         return context_msg
 

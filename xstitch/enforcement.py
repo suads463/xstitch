@@ -41,6 +41,19 @@ def generate_claude_code_hooks() -> dict:
                 ]
             }
         ],
+        "PostToolUse": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": (
+                            'python3 -c "import xstitch" 2>/dev/null && '
+                            "python3 -m xstitch.cli hook-handler --event PostToolUse; true"
+                        ),
+                    }
+                ]
+            }
+        ],
         "Stop": [
             {
                 "hooks": [
@@ -136,7 +149,7 @@ def check_claude_code_hooks() -> dict:
             try:
                 config = json.loads(path.read_text())
                 hooks = config.get("hooks", {})
-                if any("xstitch" in json.dumps(hooks.get(e, [])) for e in ["UserPromptSubmit", "Stop"]):
+                if any("xstitch" in json.dumps(hooks.get(e, [])) for e in ["UserPromptSubmit", "PostToolUse", "Stop"]):
                     return {"status": "ok", "detail": f"Hooks found in {label} settings ({path})"}
             except (json.JSONDecodeError, OSError):
                 continue
