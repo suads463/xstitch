@@ -177,7 +177,8 @@ def main():
 
     # --- hook-handler (called by Claude Code hooks, reads stdin) ---
     hh_p = sub.add_parser("hook-handler", help="Handle Claude Code hook events (reads JSON from stdin)")
-    hh_p.add_argument("--event", required=True, choices=["UserPromptSubmit", "Stop"],
+    hh_p.add_argument("--event", required=True,
+                       choices=["UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"],
                        help="The hook event name")
 
     args = parser.parse_args()
@@ -638,6 +639,187 @@ def _cmd_cleanup(args):
             print("Global registry pruned.")
 
 
+# ─── Session state helpers ────────────────────────────────────────────────────
+# Session state is stored at ~/.stitch/session_state.json.
+# It tracks per-session tool activity so we can auto-snapshot every N
+# significant tool calls without any agent cooperation.
+
+import re as _re
+from pathlib import Path as _Path
+
+_SESSION_STATE_FILE = _Path.home() / ".stitch" / "session_state.json"
+_SIGNIFICANT_TOOLS = {"Bash", "Edit", "Write", "NotebookEdit"}
+_SNAP_EVERY_N_TOOLS = 3       # snapshot every 3 significant tool calls
+_SNAP_EVERY_SECONDS = 180     # OR every 3 minutes, whichever comes first
+_SESSION_CONTINUITY_WINDOW = 1800  # 30 min: treat prompt as "same session" if Stop was < 30m ago
+
+
+def _load_session_state() -> dict:
+    try:
+        if _SESSION_STATE_FILE.exists():
+            return json.loads(_SESSION_STATE_FILE.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def _save_session_state(state: dict) -> None:
+    try:
+        _SESSION_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _SESSION_STATE_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state, indent=2))
+        tmp.replace(_SESSION_STATE_FILE)
+    except Exception:
+        pass  # Never crash the hook
+
+
+# ── Semantic command patterns ──────────────────────────────────────────────
+_BASH_PATTERNS = [
+    (_re.compile(r'mvn\s+([\w:]+)'),            lambda m: f"Maven {m.group(1)}"),
+    (_re.compile(r'gradle\s+([\w:]+)'),          lambda m: f"Gradle {m.group(1)}"),
+    (_re.compile(r'cargo\s+(\w+)'),              lambda m: f"Cargo {m.group(1)}"),
+    (_re.compile(r'go\s+(build|test|run|mod)'),  lambda m: f"Go {m.group(1)}"),
+    (_re.compile(r'npm\s+(install|run|test|build|ci)'), lambda m: f"npm {m.group(1)}"),
+    (_re.compile(r'yarn\s+(\w+)'),               lambda m: f"yarn {m.group(1)}"),
+    (_re.compile(r'pnpm\s+(\w+)'),               lambda m: f"pnpm {m.group(1)}"),
+    (_re.compile(r'pytest'),                     lambda m: "pytest"),
+    (_re.compile(r'python3?\s+-m\s+pytest'),     lambda m: "pytest"),
+    (_re.compile(r'python3?\s+-m\s+([\w.]+)'),   lambda m: f"python -m {m.group(1)}"),
+    (_re.compile(r'python3?\s+([\w./]+\.py)'),   lambda m: f"python {_Path(m.group(1)).name}"),
+    (_re.compile(r'pip3?\s+install'),            lambda m: "pip install"),
+    (_re.compile(r'pip3?\s+uninstall'),          lambda m: "pip uninstall"),
+    (_re.compile(r'brew\s+(\w+)'),               lambda m: f"brew {m.group(1)}"),
+    (_re.compile(r'apt(-get)?\s+(\w+)'),         lambda m: f"apt {m.group(2)}"),
+    (_re.compile(r'git\s+commit'),               lambda m: "git commit"),
+    (_re.compile(r'git\s+push'),                 lambda m: "git push"),
+    (_re.compile(r'git\s+pull'),                 lambda m: "git pull"),
+    (_re.compile(r'git\s+checkout'),             lambda m: "git checkout"),
+    (_re.compile(r'git\s+merge'),                lambda m: "git merge"),
+    (_re.compile(r'git\s+rebase'),               lambda m: "git rebase"),
+    (_re.compile(r'docker\s+(\w+)'),             lambda m: f"docker {m.group(1)}"),
+    (_re.compile(r'kubectl\s+(\w+)'),            lambda m: f"kubectl {m.group(1)}"),
+    (_re.compile(r'terraform\s+(\w+)'),          lambda m: f"terraform {m.group(1)}"),
+    (_re.compile(r'unzip\s+'),                   lambda m: "unzip"),
+    (_re.compile(r'tar\s+'),                     lambda m: "tar"),
+    (_re.compile(r'curl\s+'),                    lambda m: "curl"),
+    (_re.compile(r'wget\s+'),                    lambda m: "wget"),
+]
+
+
+def _semantic_bash(cmd: str) -> str:
+    cmd_stripped = cmd.strip()
+    for pattern, formatter in _BASH_PATTERNS:
+        m = pattern.search(cmd_stripped)
+        if m:
+            return formatter(m)
+    tokens = cmd_stripped.split()
+    if len(tokens) >= 2:
+        return f"{tokens[0]} {tokens[1][:30]}"
+    return tokens[0][:40] if tokens else "bash"
+
+
+def _extract_outcome(tool_response: dict | None) -> str:
+    if not tool_response or not isinstance(tool_response, dict):
+        return ""
+    try:
+        exit_code = tool_response.get("exit_code")
+        if exit_code is None:
+            exit_code = tool_response.get("returncode")
+        output = str(tool_response.get("output", "") or tool_response.get("content", "") or "")
+        error = str(tool_response.get("error", "") or tool_response.get("stderr", "") or "")
+        combined = (output + " " + error).lower()
+        if any(x in combined for x in ["build success", "tests passed", "all tests"]):
+            if "build success" in combined:
+                m = _re.search(r'(\d+)\s+test', combined)
+                if m:
+                    return f" → BUILD SUCCESS ({m.group(1)} tests)"
+            return " → SUCCESS"
+        if exit_code is not None and exit_code != 0:
+            for line in (output + "\n" + error).split("\n"):
+                line = line.strip()
+                if line and any(x in line.lower() for x in ["error", "exception", "fail", "not found"]):
+                    return f" → exit:{exit_code} ({line[:50]})"
+            return f" → exit:{exit_code}"
+        if exit_code == 0:
+            return " → OK"
+        if any(x in combined for x in ["error", "exception", "traceback", "failed"]):
+            for line in (output + "\n" + error).split("\n"):
+                line = line.strip()
+                if line and "error" in line.lower():
+                    return f" → FAILED: {line[:50]}"
+            return " → FAILED"
+        return ""
+    except Exception:
+        return ""
+
+
+def _describe_tool(tool_name: str, tool_input: dict, tool_response: dict | None = None) -> str:
+    outcome = _extract_outcome(tool_response)
+    if tool_name == "Bash":
+        cmd = str(tool_input.get("command", "")).strip().replace("\n", " ")
+        label = _semantic_bash(cmd)
+        return f"{label}{outcome}"
+    if tool_name == "Edit":
+        fp = _Path(str(tool_input.get("file_path", ""))).name
+        return f"Edited {fp}{outcome}" if fp else f"Edit{outcome}"
+    if tool_name == "Write":
+        fp = _Path(str(tool_input.get("file_path", ""))).name
+        return f"Wrote {fp}{outcome}" if fp else f"Write{outcome}"
+    if tool_name == "NotebookEdit":
+        fp = _Path(str(tool_input.get("notebook_path", ""))).name
+        return f"NotebookEdit {fp}{outcome}" if fp else f"NotebookEdit{outcome}"
+    return f"{tool_name}{outcome}"
+
+
+def _seconds_since(ts: str) -> float:
+    if not ts:
+        return float("inf")
+    from datetime import datetime, timezone
+    try:
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt).total_seconds()
+    except Exception:
+        return float("inf")
+
+
+def _now_iso_local() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _append_session_continuity(context_msg: str, current_session_id: str) -> str:
+    try:
+        state = _load_session_state()
+        stop_time = state.get("stop_time", "")
+        if not stop_time:
+            return context_msg
+        if _seconds_since(stop_time) > _SESSION_CONTINUITY_WINDOW:
+            return context_msg
+        recent_tools = state.get("recent_tools", [])
+        total_tools = state.get("sig_tool_count", 0)
+        if not recent_tools or total_tools == 0:
+            return context_msg
+        lines = [
+            "",
+            "## Prior Turn Activity (same session)",
+            f"The immediately preceding agent turn performed {total_tools} significant actions:",
+        ]
+        for t in recent_tools[-6:]:
+            lines.append(f"  - {t}")
+        lines.append(
+            "Connect the dots: use this to understand what was already done "
+            "before this new user message arrived."
+        )
+        return context_msg + "\n".join(lines)
+    except Exception:
+        return context_msg
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 def _cmd_hook_handler(store: Store, args):
     """Handle Claude Code hook events.
 
@@ -647,6 +829,9 @@ def _cmd_hook_handler(store: Store, args):
     For UserPromptSubmit, outputs JSON with:
     - systemMessage: visible warning shown to the user in the UI
     - additionalContext: injected into the agent's conversation context
+
+    For PostToolUse, auto-snapshots every N significant tool calls or every
+    N minutes — no agent cooperation required.
     """
     from . import log
     from .intelligence import auto_setup, auto_route, format_auto_route_response
@@ -659,6 +844,8 @@ def _cmd_hook_handler(store: Store, args):
             stdin_data = json.loads(raw)
     except (json.JSONDecodeError, OSError):
         pass
+
+    session_id = stdin_data.get("session_id", "")
 
     if event == "UserPromptSubmit":
         auto_setup(str(store.project_path), quiet=True)
@@ -676,6 +863,7 @@ def _cmd_hook_handler(store: Store, args):
         if system_msg:
             hook_output["systemMessage"] = system_msg
         if context_msg:
+            context_msg = _append_session_continuity(context_msg, session_id)
             hook_output["hookSpecificOutput"] = {
                 "hookEventName": "UserPromptSubmit",
                 "additionalContext": context_msg,
@@ -684,20 +872,130 @@ def _cmd_hook_handler(store: Store, args):
         if hook_output:
             print(json.dumps(hook_output))
 
+        # Record this prompt in session state for continuity tracking
+        state = _load_session_state()
+        state["session_id"] = session_id
+        state["last_prompt"] = prompt[:200]
+        state["prompt_time"] = _now_iso_local()
+        if state.get("session_id_prev") != session_id:
+            state["sig_tool_count"] = 0
+            state["last_snap_tool_count"] = 0
+            state["last_snap_time"] = ""
+            state["recent_tools"] = []
+        state["session_id_prev"] = session_id
+        _save_session_state(state)
+
+    elif event == "PostToolUse":
+        tool_name = stdin_data.get("tool_name", "")
+        if tool_name not in _SIGNIFICANT_TOOLS:
+            return
+
+        tool_input = stdin_data.get("tool_input", {})
+        tool_response = stdin_data.get("tool_response", {})
+
+        state = _load_session_state()
+
+        if session_id and state.get("session_id") != session_id:
+            state = {
+                "session_id": session_id,
+                "started_at": _now_iso_local(),
+                "sig_tool_count": 0,
+                "last_snap_tool_count": 0,
+                "last_snap_time": "",
+                "recent_tools": [],
+            }
+
+        state["sig_tool_count"] = state.get("sig_tool_count", 0) + 1
+        tool_desc = _describe_tool(tool_name, tool_input, tool_response)
+        recent = state.get("recent_tools", [])
+        recent.append(tool_desc)
+        state["recent_tools"] = recent[-15:]
+
+        tools_since_snap = state["sig_tool_count"] - state.get("last_snap_tool_count", 0)
+        last_snap_time = state.get("last_snap_time", "")
+        has_prior_snap = bool(last_snap_time)
+        secs_since_snap = _seconds_since(last_snap_time) if has_prior_snap else float("inf")
+
+        should_snap = (
+            tools_since_snap >= _SNAP_EVERY_N_TOOLS
+            or (has_prior_snap and tools_since_snap >= 1 and secs_since_snap >= _SNAP_EVERY_SECONDS)
+        )
+
+        if should_snap:
+            active = store.get_active_task_id()
+            if active:
+                snap_tools = state["recent_tools"][-(tools_since_snap):]
+                if len(snap_tools) == 1:
+                    msg = f"Progress: {snap_tools[0]}"
+                elif len(snap_tools) == 2:
+                    msg = f"Progress: {snap_tools[0]}; {snap_tools[1]}"
+                else:
+                    msg = f"Progress ({len(snap_tools)} actions): {'; '.join(snap_tools[:3])}"
+                    if len(snap_tools) > 3:
+                        msg += f" (+{len(snap_tools)-3} more)"
+
+                from .capture import capture_snapshot
+                snap = capture_snapshot(
+                    message=msg,
+                    source="hook-post-tool",
+                    cwd=str(store.project_path),
+                    task_id=active,
+                )
+                rejection = store.add_snapshot(active, snap)
+                if not rejection:
+                    store.update_context_file(active)
+
+                state["last_snap_tool_count"] = state["sig_tool_count"]
+                state["last_snap_time"] = _now_iso_local()
+
+        _save_session_state(state)
+
+    elif event == "PreToolUse":
+        pass  # Lightweight: just track timing. We don't block tools.
+
     elif event == "Stop":
         active = store.get_active_task_id()
+        state = _load_session_state()
+
         if active:
             from .capture import capture_snapshot
+
+            total = state.get("sig_tool_count", 0) if state.get("session_id") == session_id else 0
+            recent = state.get("recent_tools", []) if total > 0 else []
+
+            if total > 0:
+                last_few = recent[-5:]
+                msg = (
+                    f"Session ended — {total} significant action(s). "
+                    f"Done: {'; '.join(last_few)}"
+                )
+            else:
+                msg = "Agent session ended"
+
             snap = capture_snapshot(
-                message="Agent session ended",
-                source="hook",
+                message=msg,
+                source="hook-stop",
                 cwd=str(store.project_path),
                 task_id=active,
             )
             rejection = store.add_snapshot(active, snap)
             if not rejection:
                 store.update_context_file(active)
-                log.saved("Snapshot", "Agent session ended (Stop hook)")
+                log.saved("Snapshot", msg[:80])
+
+            if total > 0:
+                task = store.get_task(active)
+                if task and not task.current_state.strip():
+                    last_actions = "; ".join(recent[-3:])
+                    task.current_state = (
+                        f"[Auto] Last session performed {total} action(s): {last_actions}"
+                    )
+                    store.update_task(task)
+                    store.update_context_file(active)
+
+        state["stop_time"] = _now_iso_local()
+        state["stop_session_id"] = session_id
+        _save_session_state(state)
 
 
 def _build_hook_messages(result: dict, full_response: str) -> tuple[str, str]:
